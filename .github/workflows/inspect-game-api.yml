@@ -13,6 +13,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
       - name: Download official 13.0.9 interop assemblies
         run: |
           curl --fail --location --silent --show-error \
@@ -26,3 +29,10 @@ jobs:
           . .venv/bin/activate
           python -m pip install --quiet dnfile
           python tools/inspect_game_api.py interop/Assembly-CSharp.dll
+      - name: Decompile target gameplay classes
+        run: |
+          dotnet tool install ilspycmd --tool-path .tools
+          for type in PlayerBearController PlayerControllerBase PlayerStateVehicle PlayerAnimController InteractionTrigger PlayerTrigger; do
+            echo "===== $type ====="
+            .tools/ilspycmd -t "$type" interop/Assembly-CSharp.dll | sed -n '1,260p'
+          done
