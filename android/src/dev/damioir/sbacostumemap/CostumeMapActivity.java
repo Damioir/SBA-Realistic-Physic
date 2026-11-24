@@ -189,7 +189,7 @@ public final class CostumeMapActivity extends UnityPlayerActivity {
             messageInput.setText(item.text);
             fields.addView(messageInput);
         }
-        if (item.kind.equals("trigger") || item.kind.equals("message")) {
+        if (item.kind.equals("trigger") || item.kind.equals("message") || item.kind.equals("animation")) {
             eventInput = new EditText(this);
             eventInput.setSingleLine(true);
             eventInput.setHint("Event key (e.g. event-1)");
@@ -220,7 +220,7 @@ public final class CostumeMapActivity extends UnityPlayerActivity {
                         }
                         if (eventField != null) {
                             String key = eventField.getText().toString().trim();
-                            if ((item.kind.equals("trigger") || !key.isEmpty()) && !validKey(key)) {
+                            if ((item.kind.equals("trigger") || item.kind.equals("animation") || !key.isEmpty()) && !validKey(key)) {
                                 status.setText("Event key: use letters, numbers, dot, dash, underscore");
                                 return;
                             }
@@ -428,6 +428,7 @@ public final class CostumeMapActivity extends UnityPlayerActivity {
             } else if (kind.equals("trigger")) {
                 eventKey = "event-1";
             } else if (kind.equals("animation")) {
+                eventKey = "event-1";
                 animationKey = "idle";
             }
         }

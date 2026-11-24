@@ -130,6 +130,9 @@ struct UnityTypes {
     void* game_object_find = nullptr;
     void* player_on_trigger_enter = nullptr;
     void* player_handle_death = nullptr;
+    void* component_get_game_object = nullptr;
+    void* player_anim_controller_type = nullptr;
+    void* player_anim_play = nullptr;
 };
 
 std::atomic<bool> g_started{false};
@@ -151,6 +154,8 @@ bool resolve_types() {
         g_api.method(g_types.game_object, "set_name", 1);
     g_types.transform_set_position =
         g_api.method(g_types.transform, "set_position", 1);
+    g_types.game_object_get_component =
+        g_api.method(g_types.game_object, "GetComponent", 1);
     g_types.transform_set_scale =
         g_api.method(g_types.transform, "set_localScale", 1);
     if (!g_types.game_object_create_primitive ||
@@ -159,8 +164,6 @@ bool resolve_types() {
         !g_types.transform_set_scale) return false;
 
     if (g_types.renderer) {
-        g_types.game_object_get_component =
-            g_api.method(g_types.game_object, "GetComponent", 1);
         g_types.renderer_get_material =
             g_api.method(g_types.renderer, "get_material", 0);
         void* material = g_api.find_class("UnityEngine", "Material");
@@ -181,6 +184,15 @@ bool resolve_types() {
     void* player = g_api.find_class("", "PlayerBearController");
     g_types.player_on_trigger_enter = g_api.method(player, "OnTriggerEnter", 1);
     g_types.player_handle_death = g_api.method(player, "HandlePlayerDeath", 0);
+    void* component = g_api.find_class("UnityEngine", "Component");
+    if (component) g_types.component_get_game_object =
+        g_api.method(component, "get_gameObject", 0);
+    void* player_anim = g_api.find_class("", "PlayerAnimController");
+    if (player_anim) {
+        g_types.player_anim_controller_type =
+            g_api.type_get_object(g_api.class_get_type(player_anim));
+        g_types.player_anim_play = g_api.method(player_anim, "PlayAnim", 2);
+    }
 
     if (g_types.text_mesh) {
         g_types.game_object_add_component =
@@ -231,6 +243,12 @@ void* create_cube(const std::string& name, Vector3 position, Vector3 scale, Colo
     set_color(game_object, color);
     return game_object;
 }
+
+struct AnimationAction {
+    std::string event_key;
+    std::string animation_key;
+};
+std::vector<AnimationAction> g_animations;
 
 void make_trigger(void* game_object) {
     if (!game_object || !g_types.box_collider_type || !g_types.game_object_get_component ||
@@ -289,6 +307,22 @@ void show_messages_for_event(const std::string& event_key) {
     }
 }
 
+void play_animations_for_event(const std::string& event_key, void* player) {
+    if (!g_types.player_anim_controller_type || !g_types.player_anim_play ||
+        !g_types.component_get_game_object || !g_types.game_object_get_component) return;
+    void* player_object = g_api.invoke(g_types.component_get_game_object, player);
+    void* type_args[] = {g_types.player_anim_controller_type};
+    void* controller = g_api.invoke(g_types.game_object_get_component, player_object, type_args);
+    if (!controller) return;
+    for (const AnimationAction& action : g_animations) {
+        if (action.event_key != event_key) continue;
+        void* animation_name = g_api.string_new(action.animation_key.c_str());
+        bool force = true;
+        void* args[] = {animation_name, &force};
+        g_api.invoke(g_types.player_anim_play, controller, args);
+    }
+}
+
 void on_player_trigger_enter(void* self, void* other, void* method_info) {
     if (g_api.player_trigger_original) {
         g_api.player_trigger_original(self, other, method_info);
@@ -305,7 +339,9 @@ void on_player_trigger_enter(void* self, void* other, void* method_info) {
     }
     constexpr const char* kEventPrefix = "sba-costume-event:";
     if (has_prefix(object_name, kEventPrefix)) {
-        show_messages_for_event(object_name.substr(std::strlen(kEventPrefix)));
+        const std::string event_key = object_name.substr(std::strlen(kEventPrefix));
+        show_messages_for_event(event_key);
+        play_animations_for_event(event_key, self);
     }
 }
 
@@ -438,8 +474,10 @@ void load_into_game() {
                 break;
             }
             case ElementKind::Animation:
-                LOGW("runtime behavior not implemented for animation element %s",
-                     element.id.c_str());
+                if (!element.event_key.empty() && !element.animation_key.empty()) {
+                    g_animations.push_back({element.event_key, element.animation_key});
+                    ++spawned;
+                }
                 break;
         }
     }
