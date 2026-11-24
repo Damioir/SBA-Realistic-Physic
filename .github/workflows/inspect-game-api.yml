@@ -29,10 +29,11 @@ jobs:
           . .venv/bin/activate
           python -m pip install --quiet dnfile
           python tools/inspect_game_api.py interop/Assembly-CSharp.dll
-      - name: Decompile target gameplay classes
+      - name: Print relevant method signatures
         run: |
           dotnet tool install ilspycmd --tool-path .tools
           for type in PlayerBearController PlayerControllerBase PlayerStateVehicle PlayerAnimController InteractionTrigger PlayerTrigger; do
-            echo "===== $type ====="
-            .tools/ilspycmd -t "$type" interop/Assembly-CSharp.dll | sed -n '1,260p'
+            .tools/ilspycmd -t "$type" interop/Assembly-CSharp.dll > "$type.cs"
           done
+          grep -n -E -A 10 -B 4 "HandlePlayerDeath|DamagePlayer|OnTriggerEnter\(|GetVehicleSeatIndex|PlayArcadeAnimation|EnterVehicle|PlayBearAnimation|PlayAnimWithTransition|Sit" \
+            PlayerBearController.cs PlayerControllerBase.cs PlayerStateVehicle.cs PlayerAnimController.cs InteractionTrigger.cs PlayerTrigger.cs || true
