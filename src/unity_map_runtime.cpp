@@ -242,8 +242,16 @@ void set_color(void* game_object, Color color) {
     g_api.invoke(g_types.material_set_color, material, color_args);
 }
 
-void* create_cube(const std::string& name, Vector3 position, Vector3 scale, Color color, float yaw = 0.0f) {
-    int primitive_cube = 3;
+int primitive_type(const std::string& shape) {
+    if (shape == "sphere") return 0;
+    if (shape == "capsule") return 1;
+    if (shape == "cylinder") return 2;
+    return 3;
+}
+
+void* create_cube(const std::string& name, Vector3 position, Vector3 scale, Color color,
+                  float yaw = 0.0f, int primitive = 3) {
+    int primitive_cube = primitive;
     void* args[] = {&primitive_cube};
     void* game_object = g_api.invoke(g_types.game_object_create_primitive, nullptr, args);
     if (!game_object) return nullptr;
@@ -459,7 +467,8 @@ void load_into_game() {
         switch (element.kind) {
             case ElementKind::Prop:
                 if (create_cube(element.id, {element.x, element.y, element.z},
-                                {element.scale_x, element.scale_y, element.scale_z}, normal, element.yaw)) ++spawned;
+                                {element.scale_x, element.scale_y, element.scale_z}, normal, element.yaw,
+                                primitive_type(element.prefab))) ++spawned;
                 break;
             case ElementKind::Chair:
                 create_chair(element);

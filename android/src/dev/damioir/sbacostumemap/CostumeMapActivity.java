@@ -191,6 +191,15 @@ public final class CostumeMapActivity extends UnityPlayerActivity {
         rotationInput.setText(String.format(Locale.US, "%.2f", item.yaw));
         fields.addView(rotationInput);
 
+        EditText prefabInput = null;
+        if (item.kind.equals("prop")) {
+            prefabInput = new EditText(this);
+            prefabInput.setSingleLine(true);
+            prefabInput.setHint("Shape: cube, sphere, capsule, cylinder");
+            prefabInput.setText(item.prefab);
+            fields.addView(prefabInput);
+        }
+
         EditText messageInput = null;
         EditText eventInput = null;
         EditText animationInput = null;
@@ -216,6 +225,7 @@ public final class CostumeMapActivity extends UnityPlayerActivity {
             fields.addView(animationInput);
         }
 
+        final EditText prefabField = prefabInput;
         final EditText messageField = messageInput;
         final EditText eventField = eventInput;
         final EditText animationField = animationInput;
@@ -236,6 +246,15 @@ public final class CostumeMapActivity extends UnityPlayerActivity {
                                 !Float.isFinite(rotation) || Math.abs(rotation) > 360000.0f) {
                             status.setText("Height or rotation is out of range");
                             return;
+                        }
+                        if (prefabField != null) {
+                            String shape = prefabField.getText().toString().trim().toLowerCase(Locale.ROOT);
+                            if (!shape.equals("cube") && !shape.equals("sphere") &&
+                                    !shape.equals("capsule") && !shape.equals("cylinder")) {
+                                status.setText("Shape must be cube, sphere, capsule, or cylinder");
+                                return;
+                            }
+                            item.prefab = shape;
                         }
                         if (eventField != null) {
                             String key = eventField.getText().toString().trim();
@@ -306,7 +325,7 @@ public final class CostumeMapActivity extends UnityPlayerActivity {
             data.append("META\tcostume-map\t").append(escape(title)).append("\t\n");
             for (MapItem item : items) {
                 data.append("ELEMENT\t").append(item.id).append('\t').append(item.kind)
-                        .append("\t\t")
+                        .append('\t').append(escape(item.prefab)).append('\t')
                         .append(String.format(Locale.US, "%.2f", item.worldX())).append('\t')
                         .append(String.format(Locale.US, "%.2f", item.worldY)).append('\t')
                         .append(String.format(Locale.US, "%.2f", item.worldZ()))
@@ -370,6 +389,8 @@ public final class CostumeMapActivity extends UnityPlayerActivity {
                         row = Math.max(0, Math.min(11, row));
                         String id = unescape(fields[1]);
                         MapItem item = new MapItem(id, kind, column, row);
+                        item.prefab = unescape(fields[3]);
+                        if (item.prefab.isEmpty()) item.prefab = "cube";
                         item.worldY = Float.parseFloat(fields[5]);
                         item.yaw = Float.parseFloat(fields[7]);
                         item.scaleX = Float.parseFloat(fields[8]);
@@ -434,6 +455,7 @@ public final class CostumeMapActivity extends UnityPlayerActivity {
         float scaleX = 1.0f;
         float scaleY = 1.0f;
         float scaleZ = 1.0f;
+        String prefab = "cube";
         String text = "";
         String eventKey = "";
         String animationKey = "";
