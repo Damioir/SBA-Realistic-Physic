@@ -179,6 +179,18 @@ public final class CostumeMapActivity extends UnityPlayerActivity {
         sizeInput.setText(String.format(Locale.US, "%.2f", item.scaleX));
         fields.addView(sizeInput);
 
+        EditText heightInput = new EditText(this);
+        heightInput.setSingleLine(true);
+        heightInput.setHint("Height");
+        heightInput.setText(String.format(Locale.US, "%.2f", item.worldY));
+        fields.addView(heightInput);
+
+        EditText rotationInput = new EditText(this);
+        rotationInput.setSingleLine(true);
+        rotationInput.setHint("Rotation (degrees)");
+        rotationInput.setText(String.format(Locale.US, "%.2f", item.yaw));
+        fields.addView(rotationInput);
+
         EditText messageInput = null;
         EditText eventInput = null;
         EditText animationInput = null;
@@ -214,8 +226,15 @@ public final class CostumeMapActivity extends UnityPlayerActivity {
                 .setPositiveButton("APPLY", (dialog, which) -> {
                     try {
                         float size = Float.parseFloat(sizeInput.getText().toString().trim());
+                        float height = Float.parseFloat(heightInput.getText().toString().trim());
+                        float rotation = Float.parseFloat(rotationInput.getText().toString().trim());
                         if (!Float.isFinite(size) || size < 0.05f || size > 100.0f) {
                             status.setText("Size must be between 0.05 and 100");
+                            return;
+                        }
+                        if (!Float.isFinite(height) || Math.abs(height) > 5000.0f ||
+                                !Float.isFinite(rotation) || Math.abs(rotation) > 360000.0f) {
+                            status.setText("Height or rotation is out of range");
                             return;
                         }
                         if (eventField != null) {
@@ -245,6 +264,8 @@ public final class CostumeMapActivity extends UnityPlayerActivity {
                         item.scaleX = size;
                         item.scaleY = size;
                         item.scaleZ = size;
+                        item.worldY = height;
+                        item.yaw = rotation;
                         board.invalidate();
                         status.setText("Updated " + item.kind.replace('_', ' '));
                     } catch (NumberFormatException error) {

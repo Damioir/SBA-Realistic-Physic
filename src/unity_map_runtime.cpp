@@ -10,6 +10,7 @@
 #include <cstddef>
 #include <cstring>
 #include <cstdint>
+#include <cmath>
 #include <string>
 #include <vector>
 
@@ -112,6 +113,7 @@ struct UnityTypes {
     void* game_object_set_name = nullptr;
     void* transform_set_position = nullptr;
     void* transform_set_scale = nullptr;
+    void* transform_set_euler_angles = nullptr;
     void* renderer = nullptr;
     void* game_object_get_component = nullptr;
     void* renderer_get_material = nullptr;
@@ -158,6 +160,8 @@ bool resolve_types() {
         g_api.method(g_types.game_object, "GetComponent", 1);
     g_types.transform_set_scale =
         g_api.method(g_types.transform, "set_localScale", 1);
+    g_types.transform_set_euler_angles =
+        g_api.method(g_types.transform, "set_eulerAngles", 1);
     if (!g_types.game_object_create_primitive ||
         !g_types.game_object_get_transform ||
         !g_types.transform_set_position ||
@@ -206,13 +210,18 @@ bool resolve_types() {
     return true;
 }
 
-void set_transform(void* game_object, Vector3 position, Vector3 scale) {
+void set_transform(void* game_object, Vector3 position, Vector3 scale, float yaw) {
     void* transform = g_api.invoke(g_types.game_object_get_transform, game_object);
     if (!transform) return;
     void* position_args[] = {&position};
     void* scale_args[] = {&scale};
     g_api.invoke(g_types.transform_set_position, transform, position_args);
     g_api.invoke(g_types.transform_set_scale, transform, scale_args);
+    if (g_types.transform_set_euler_angles) {
+        Vector3 rotation{0.0f, yaw, 0.0f};
+        void* rotation_args[] = {&rotation};
+        g_api.invoke(g_types.transform_set_euler_angles, transform, rotation_args);
+    }
 }
 
 void set_name(void* game_object, const std::string& name) {
@@ -233,12 +242,12 @@ void set_color(void* game_object, Color color) {
     g_api.invoke(g_types.material_set_color, material, color_args);
 }
 
-void* create_cube(const std::string& name, Vector3 position, Vector3 scale, Color color) {
+void* create_cube(const std::string& name, Vector3 position, Vector3 scale, Color color, float yaw = 0.0f) {
     int primitive_cube = 3;
     void* args[] = {&primitive_cube};
     void* game_object = g_api.invoke(g_types.game_object_create_primitive, nullptr, args);
     if (!game_object) return nullptr;
-    set_transform(game_object, position, scale);
+    set_transform(game_object, position, scale, yaw);
     set_name(game_object, name);
     set_color(game_object, color);
     return game_object;
@@ -366,22 +375,30 @@ bool install_death_block_hook() {
     return true;
 }
 
+Vector3 chair_point(Vector3 base, float dx, float dy, float dz, float yaw) {
+    const float radians = yaw * 0.017453292519943295f;
+    const float cosine = std::cos(radians);
+    const float sine = std::sin(radians);
+    return {base.x + dx * cosine + dz * sine, base.y + dy,
+            base.z - dx * sine + dz * cosine};
+}
+
 void create_chair(const Element& element) {
     const Color wood{0.48f, 0.26f, 0.12f, 1.0f};
     const Vector3 base{element.x, element.y, element.z};
     const Vector3 unit{element.scale_x, element.scale_y, element.scale_z};
     create_cube(element.id + "-seat",
                 {base.x, base.y + 0.55f * unit.y, base.z},
-                {0.85f * unit.x, 0.15f * unit.y, 0.85f * unit.z}, wood);
+                {0.85f * unit.x, 0.15f * unit.y, 0.85f * unit.z}, wood, element.yaw);
     create_cube(element.id + "-back",
-                {base.x, base.y + 1.05f * unit.y, base.z - 0.35f * unit.z},
-                {0.85f * unit.x, 0.9f * unit.y, 0.15f * unit.z}, wood);
+                chair_point(base, 0.0f, 1.05f * unit.y, -0.35f * unit.z, element.yaw),
+                {0.85f * unit.x, 0.9f * unit.y, 0.15f * unit.z}, wood, element.yaw);
     for (int sx : {-1, 1}) {
         for (int sz : {-1, 1}) {
             create_cube(element.id + "-leg",
-                        {base.x + sx * 0.32f * unit.x, base.y + 0.25f * unit.y,
-                         base.z + sz * 0.32f * unit.z},
-                        {0.12f * unit.x, 0.5f * unit.y, 0.12f * unit.z}, wood);
+                        chair_point(base, sx * 0.32f * unit.x, 0.25f * unit.y,
+                                    sz * 0.32f * unit.z, element.yaw),
+                        {0.12f * unit.x, 0.5f * unit.y, 0.12f * unit.z}, wood, element.yaw);
         }
     }
 }
@@ -396,7 +413,7 @@ void create_message(const Element& element) {
     void* game_object = create_cube(object_name,
                                    {element.x, element.event_key.empty() ? element.y + 1.4f : -10000.0f, element.z},
                                    {0.05f, 0.05f, 0.05f},
-                                   {0.58f, 0.32f, 0.88f, 1.0f});
+                                   {0.58f, 0.32f, 0.88f, 1.0f}, element.yaw);
     if (!game_object) return;
 
     void* component_args[] = {g_types.text_mesh_type};
@@ -442,7 +459,7 @@ void load_into_game() {
         switch (element.kind) {
             case ElementKind::Prop:
                 if (create_cube(element.id, {element.x, element.y, element.z},
-                                {element.scale_x, element.scale_y, element.scale_z}, normal)) ++spawned;
+                                {element.scale_x, element.scale_y, element.scale_z}, normal, element.yaw)) ++spawned;
                 break;
             case ElementKind::Chair:
                 create_chair(element);
@@ -451,7 +468,7 @@ void load_into_game() {
             case ElementKind::DeathBlock: {
                 void* block = create_cube(std::string("sba-costume-death:") + element.id,
                                           {element.x, element.y, element.z},
-                                          {element.scale_x, element.scale_y, element.scale_z}, danger);
+                                          {element.scale_x, element.scale_y, element.scale_z}, danger, element.yaw);
                 if (block) {
                     make_trigger(block);
                     ++spawned;
@@ -466,7 +483,7 @@ void load_into_game() {
                 const std::string name = "sba-costume-event:" + element.event_key;
                 void* trigger = create_cube(name, {element.x, element.y, element.z},
                                             {element.scale_x, element.scale_y, element.scale_z},
-                                            {0.20f, 0.82f, 0.47f, 1.0f});
+                                            {0.20f, 0.82f, 0.47f, 1.0f}, element.yaw);
                 if (trigger) {
                     make_trigger(trigger);
                     ++spawned;
