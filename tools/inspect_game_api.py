@@ -34,17 +34,15 @@ def main():
         full_name = (namespace + "." if namespace else "") + name
         methods = []
         for method_ref in type_row.MethodList:
-            method = method_ref.row
-            method_name = text(method.Name)
+            method_name = text(method_ref.row.Name)
             if TERMS.search(method_name):
-                signature = bytes(method.Signature).hex() if method.Signature else ""
-                methods.append((method_name, signature))
+                methods.append(method_name)
 
         if not TERMS.search(full_name) and not methods:
             continue
         print(full_name)
-        for method_name, signature in methods:
-            print(f"  {method_name} sig={signature}")
+        for method_name in methods:
+            print(f"  {method_name}")
         emitted += 1
         if emitted >= 250:
             print("Output capped at 250 matching types.")
