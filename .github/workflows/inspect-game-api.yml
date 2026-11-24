@@ -32,8 +32,8 @@ jobs:
       - name: Print relevant method signatures
         run: |
           dotnet tool install ilspycmd --tool-path .tools
-          for type in PlayerBearController PlayerControllerBase PlayerStateVehicle PlayerAnimController InteractionTrigger PlayerTrigger; do
+          for type in PlayerBearController PlayerControllerBase PlayerStateVehicle PlayerAnimController InteractionTrigger PlayerTrigger VehicleBase; do
             .tools/ilspycmd -t "$type" interop/Assembly-CSharp.dll > "$type.cs"
           done
           grep -n -E -A 10 -B 4 "HandlePlayerDeath|DamagePlayer|OnTriggerEnter\(|GetVehicleSeatIndex|PlayArcadeAnimation|EnterVehicle|PlayBearAnimation|PlayAnimWithTransition|Sit" \
-            PlayerBearController.cs PlayerControllerBase.cs PlayerStateVehicle.cs PlayerAnimController.cs InteractionTrigger.cs PlayerTrigger.cs || true
+            PlayerBearController.cs PlayerControllerBase.cs PlayerStateVehicle.cs PlayerAnimController.cs InteractionTrigger.cs PlayerTrigger.cs VehicleBase.cs || true
