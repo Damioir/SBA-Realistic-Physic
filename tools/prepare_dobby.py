@@ -19,6 +19,16 @@ for name in ("LICENSE", "include", "external", "source"):
     else:
         shutil.copy2(original, destination)
 
+# Dobby's ARM pointer-auth helpers include Apple's header unconditionally,
+# though Android NDK does not provide it and this mod targets plain arm64.
+pac_header = target / "source/dobby/pac_kit.h"
+pac_text = pac_header.read_text(encoding="utf-8")
+pac_text = pac_text.replace(
+    "#include <ptrauth.h>",
+    "#if __has_include(<ptrauth.h>)\n#include <ptrauth.h>\n#endif",
+)
+pac_header.write_text(pac_text, encoding="utf-8")
+
 sources = """external/logging/logging.cc
 source/Backend/UserMode/ExecMemory/clear-cache-tool-all.c
 source/Backend/UserMode/ExecMemory/code-patch-tool-posix.cc
