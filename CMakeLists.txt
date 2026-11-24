@@ -11,6 +11,7 @@ add_library(
     src/physics.cpp
     src/costume_map.cpp
     src/editor_session.cpp
+    src/map_storage.cpp
 )
 
 find_library(log-lib log)
