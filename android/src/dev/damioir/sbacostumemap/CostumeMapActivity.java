@@ -18,7 +18,10 @@ import android.widget.TextView;
 import com.unity3d.player.UnityPlayerActivity;
 
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileOutputStream;
+import java.io.InputStreamReader;
+import java.io.BufferedReader;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Locale;
@@ -121,7 +124,7 @@ public final class CostumeMapActivity extends UnityPlayerActivity {
                 status.setText("Last item removed");
             }
         });
-        footer.addView(undo, new LinearLayout.LayoutParams(dp(82), dp(48)));
+        footer.addView(undo, new LinearLayout.LayoutParams(dp(64), dp(48)));
 
         Button remove = makeButton("DELETE");
         remove.setOnClickListener(v -> {
@@ -132,11 +135,15 @@ public final class CostumeMapActivity extends UnityPlayerActivity {
                 status.setText("Item deleted");
             }
         });
-        footer.addView(remove, new LinearLayout.LayoutParams(dp(88), dp(48)));
+        footer.addView(remove, new LinearLayout.LayoutParams(dp(68), dp(48)));
+
+        Button load = makeButton("LOAD");
+        load.setOnClickListener(v -> loadMap());
+        footer.addView(load, new LinearLayout.LayoutParams(dp(64), dp(48)));
 
         Button save = makeButton("SAVE");
         save.setOnClickListener(v -> saveMap());
-        footer.addView(save, new LinearLayout.LayoutParams(dp(78), dp(48)));
+        footer.addView(save, new LinearLayout.LayoutParams(dp(64), dp(48)));
         column.addView(footer);
 
         root.addView(editorLayer, new FrameLayout.LayoutParams(
@@ -192,10 +199,81 @@ public final class CostumeMapActivity extends UnityPlayerActivity {
                 status.setText("Could not save map");
                 return;
             }
-            status.setText("Saved " + items.size() + " items");
+            status.setText("Saved " + items.size() + "; restart game to load");
         } catch (Exception e) {
             status.setText("Save failed: " + e.getClass().getSimpleName());
         }
+    }
+
+    private void loadMap() {
+        try {
+            File directory = getExternalFilesDir("CostumeMaps");
+            File target = directory == null ? null : new File(directory, "map1.sbamap");
+            if (target == null || !target.isFile()) {
+                status.setText("No saved map yet");
+                return;
+            }
+            ArrayList<MapItem> loaded = new ArrayList<>();
+            String loadedTitle = "My Costume Map";
+            int largestId = 0;
+            try (BufferedReader reader = new BufferedReader(new InputStreamReader(
+                    new FileInputStream(target), StandardCharsets.UTF_8))) {
+                String line;
+                boolean header = false;
+                while ((line = reader.readLine()) != null) {
+                    if (!header) {
+                        if (!line.equals("SBA_MAP\t1")) throw new IllegalArgumentException("Bad map header");
+                        header = true;
+                        continue;
+                    }
+                    String[] fields = line.split("\t", -1);
+                    if (fields.length == 4 && fields[0].equals("META")) {
+                        loadedTitle = unescape(fields[2]);
+                    } else if (fields.length == 14 && fields[0].equals("ELEMENT")) {
+                        String kind = fields[2];
+                        if (!kind.equals("prop") && !kind.equals("chair") &&
+                                !kind.equals("death_block") && !kind.equals("message") &&
+                                !kind.equals("trigger") && !kind.equals("animation")) continue;
+                        int column = Math.round(Float.parseFloat(fields[4]) / 2.0f + 10.0f);
+                        int row = Math.round(Float.parseFloat(fields[6]) / 2.0f + 6.0f);
+                        column = Math.max(0, Math.min(19, column));
+                        row = Math.max(0, Math.min(11, row));
+                        String id = unescape(fields[1]);
+                        loaded.add(new MapItem(id, kind, column, row));
+                        if (id.startsWith("item-")) {
+                            try { largestId = Math.max(largestId, Integer.parseInt(id.substring(5))); }
+                            catch (NumberFormatException ignored) { }
+                        }
+                    }
+                }
+                if (!header) throw new IllegalArgumentException("Empty map");
+            }
+            items.clear();
+            items.addAll(loaded);
+            selectedIndex = -1;
+            nextId = largestId + 1;
+            titleInput.setText(loadedTitle);
+            board.invalidate();
+            status.setText("Loaded " + items.size() + " items");
+        } catch (Exception e) {
+            status.setText("Load failed: " + e.getClass().getSimpleName());
+        }
+    }
+
+    private static String unescape(String value) {
+        StringBuilder output = new StringBuilder();
+        for (int i = 0; i < value.length(); i++) {
+            char current = value.charAt(i);
+            if (current == '%' && i + 2 < value.length()) {
+                try {
+                    output.append((char) Integer.parseInt(value.substring(i + 1, i + 3), 16));
+                    i += 2;
+                    continue;
+                } catch (NumberFormatException ignored) { }
+            }
+            output.append(current);
+        }
+        return output.toString();
     }
 
     private static String escape(String value) {
@@ -215,8 +293,8 @@ public final class CostumeMapActivity extends UnityPlayerActivity {
         final float worldX;
         final float worldZ;
 
-        MapItem(int id, String kind, int column, int row) {
-            this.id = "item-" + id;
+        MapItem(String id, String kind, int column, int row) {
+            this.id = id;
             this.kind = kind;
             this.column = column;
             this.row = row;
@@ -294,7 +372,7 @@ public final class CostumeMapActivity extends UnityPlayerActivity {
                 status.setText("Map limit reached");
                 return true;
             }
-            items.add(new MapItem(nextId++, selectedTool, column, row));
+            items.add(new MapItem("item-" + nextId++, selectedTool, column, row));
             selectedIndex = items.size() - 1;
             invalidate();
             status.setText("Placed " + selectedTool.replace('_', ' '));
