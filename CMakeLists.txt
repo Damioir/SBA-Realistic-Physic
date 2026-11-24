@@ -12,6 +12,7 @@ add_library(
     src/costume_map.cpp
     src/editor_session.cpp
     src/map_storage.cpp
+    src/unity_map_runtime.cpp
 )
 
 find_library(log-lib log)
