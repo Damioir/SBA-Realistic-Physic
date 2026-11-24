@@ -29,7 +29,7 @@ def main():
 
     emitted = 0
     for type_row in pe.net.mdtables.TypeDef:
-        namespace = text(type_row.Namespace)
+        namespace = text(type_row.TypeNamespace)
         name = text(type_row.TypeName)
         full_name = (namespace + "." if namespace else "") + name
         methods = []
