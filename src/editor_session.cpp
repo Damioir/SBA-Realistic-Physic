@@ -29,7 +29,7 @@ float snapped(float value, float step) {
 
 EditorSession::EditorSession(Document document) : document_(std::move(document)) {
     std::string error;
-    if (!validate(document_, &error)) document_ = Document{};
+    if (!validate(document_, &error)) {\n        document_ = Document{};\n        document_.id = "new-map";\n        document_.title = "New Map";\n    }
 }
 
 bool EditorSession::select(const std::string& id) {
