@@ -178,7 +178,7 @@ public final class CostumeMapActivity extends UnityPlayerActivity {
             data.append("META\tcostume-map\t").append(escape(title)).append("\t\n");
             for (MapItem item : items) {
                 String text = item.kind.equals("message") ? "Hello bear!" : "";
-                String event = item.kind.equals("trigger") ? "event-1" : "";
+                String event = (item.kind.equals("trigger") || item.kind.equals("message")) ? "event-1" : "";
                 String animation = item.kind.equals("animation") ? "idle" : "";
                 data.append("ELEMENT\t").append(item.id).append('\t').append(item.kind)
                         .append("\t\t")

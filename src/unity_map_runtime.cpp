@@ -11,6 +11,7 @@
 #include <cstring>
 #include <cstdint>
 #include <string>
+#include <vector>
 
 #define TAG "SBACostumeMapMaker"
 #define LOGI(...) __android_log_print(ANDROID_LOG_INFO, TAG, __VA_ARGS__)
@@ -126,6 +127,7 @@ struct UnityTypes {
     void* collider_set_is_trigger = nullptr;
     void* collider_get_game_object = nullptr;
     void* game_object_get_name = nullptr;
+    void* game_object_find = nullptr;
     void* player_on_trigger_enter = nullptr;
     void* player_handle_death = nullptr;
 };
@@ -175,6 +177,7 @@ bool resolve_types() {
         g_types.collider_get_game_object = g_api.method(g_types.collider, "get_gameObject", 0);
     }
     g_types.game_object_get_name = g_api.method(g_types.game_object, "get_name", 0);
+    g_types.game_object_find = g_api.method(g_types.game_object, "Find", 1);
     void* player = g_api.find_class("", "PlayerBearController");
     g_types.player_on_trigger_enter = g_api.method(player, "OnTriggerEnter", 1);
     g_types.player_handle_death = g_api.method(player, "HandlePlayerDeath", 0);
@@ -247,15 +250,36 @@ struct Il2CppStringView {
     char16_t chars[1];
 };
 
-bool has_prefix(void* managed_string, const char* prefix) {
-    if (!managed_string) return false;
+bool managed_ascii(void* managed_string, std::string* output) {
+    if (!managed_string || !output) return false;
     const auto* value = static_cast<const Il2CppStringView*>(managed_string);
-    std::size_t i = 0;
-    for (; prefix[i] != '\0'; ++i) {
-        if (i >= static_cast<std::size_t>(value->length) ||
-            value->chars[i] != static_cast<unsigned char>(prefix[i])) return false;
+    if (value->length < 0 || value->length > 256) return false;
+    output->clear();
+    output->reserve(static_cast<std::size_t>(value->length));
+    for (int32_t i = 0; i < value->length; ++i) {
+        if (value->chars[i] > 0x7f) return false;
+        output->push_back(static_cast<char>(value->chars[i]));
     }
     return true;
+}
+
+bool has_prefix(const std::string& value, const char* prefix) {
+    return value.compare(0, std::strlen(prefix), prefix) == 0;
+}
+
+void show_messages_for_event(const std::string& event_key) {
+    if (!g_types.game_object_find || !g_types.game_object_get_transform ||
+        !g_types.transform_set_position) return;
+    for (const MessagePlacement& message : g_messages) {
+        if (message.event_key != event_key) continue;
+        void* object_name = g_api.string_new(message.object_name.c_str());
+        void* find_args[] = {object_name};
+        void* game_object = g_api.invoke(g_types.game_object_find, nullptr, find_args);
+        if (!game_object) continue;
+        void* transform = g_api.invoke(g_types.game_object_get_transform, game_object);
+        void* position_args[] = {const_cast<Vector3*>(&message.position)};
+        g_api.invoke(g_types.transform_set_position, transform, position_args);
+    }
 }
 
 void on_player_trigger_enter(void* self, void* other, void* method_info) {
@@ -264,9 +288,18 @@ void on_player_trigger_enter(void* self, void* other, void* method_info) {
     }
     if (!self || !other || !g_types.collider_get_game_object || !g_types.game_object_get_name) return;
     void* object = g_api.invoke(g_types.collider_get_game_object, other);
+    if (!object) return;
     void* name = g_api.invoke(g_types.game_object_get_name, object);
-    if (!has_prefix(name, "sba-costume-death:") || !g_types.player_handle_death) return;
-    g_api.invoke(g_types.player_handle_death, self);
+    std::string object_name;
+    if (!managed_ascii(name, &object_name)) return;
+    if (has_prefix(object_name, "sba-costume-death:")) {
+        if (g_types.player_handle_death) g_api.invoke(g_types.player_handle_death, self);
+        return;
+    }
+    constexpr const char* kEventPrefix = "sba-costume-event:";
+    if (has_prefix(object_name, kEventPrefix)) {
+        show_messages_for_event(object_name.substr(std::strlen(kEventPrefix)));
+    }
 }
 
 bool install_death_block_hook() {
@@ -310,14 +343,22 @@ void create_chair(const Element& element) {
     }
 }
 
+struct MessagePlacement {
+    std::string event_key;
+    std::string object_name;
+    Vector3 position;
+};
+std::vector<MessagePlacement> g_messages;
+
 void create_message(const Element& element) {
     if (!g_types.text_mesh || !g_types.game_object_add_component ||
         !g_types.text_mesh_type || !g_types.text_mesh_set_text) {
         LOGW("TextMesh unavailable; skipped a message element");
         return;
     }
-    void* game_object = create_cube(element.id + "-message",
-                                   {element.x, element.y + 1.4f, element.z},
+    const std::string object_name = "sba-costume-message:" + element.event_key + ":" + element.id;
+    void* game_object = create_cube(object_name,
+                                   {element.x, element.event_key.empty() ? element.y + 1.4f : -10000.0f, element.z},
                                    {0.05f, 0.05f, 0.05f},
                                    {0.58f, 0.32f, 0.88f, 1.0f});
     if (!game_object) return;
@@ -328,6 +369,10 @@ void create_message(const Element& element) {
     void* text = g_api.string_new(element.text.c_str());
     void* text_args[] = {text};
     g_api.invoke(g_types.text_mesh_set_text, text_mesh, text_args);
+    if (!element.event_key.empty()) {
+        g_messages.push_back({element.event_key, object_name,
+                              {element.x, element.y + 1.4f, element.z}});
+    }
     if (g_types.text_mesh_set_font_size) {
         int font_size = 48;
         void* size_args[] = {&font_size};
@@ -381,10 +426,20 @@ void load_into_game() {
                 create_message(element);
                 ++spawned;
                 break;
-            case ElementKind::Trigger:
+            case ElementKind::Trigger: {
+                const std::string name = "sba-costume-event:" + element.event_key;
+                void* trigger = create_cube(name, {element.x, element.y, element.z},
+                                            {element.scale_x, element.scale_y, element.scale_z},
+                                            {0.20f, 0.82f, 0.47f, 1.0f});
+                if (trigger) {
+                    make_trigger(trigger);
+                    ++spawned;
+                }
+                break;
+            }
             case ElementKind::Animation:
-                LOGW("runtime behavior not implemented for %s element %s",
-                     kind_name(element.kind), element.id.c_str());
+                LOGW("runtime behavior not implemented for animation element %s",
+                     element.id.c_str());
                 break;
         }
     }
