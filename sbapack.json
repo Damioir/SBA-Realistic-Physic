@@ -2,5 +2,6 @@
   "name": "SBA Costume Map Maker",
   "version": "0.1.0",
   "author": "Damioir",
-  "id": "damioir.sba.costumemap"
+  "id": "damioir.sba.costumemap",
+  "activity": "dev.damioir.sbacostumemap.CostumeMapActivity"
 }
