@@ -1,22 +1,23 @@
 #!/usr/bin/env python3
-"""Print SBA 13.0.9 player/object APIs from the official interop assembly."""
+"""Print likely SBA 13.0.9 player and interaction APIs from Assembly-CSharp."""
 
 import re
 import sys
 
 import dnfile
 
-TERMS = re.compile(
-    r"player|bear|character|seat|sit|death|kill|die|damage|respawn|"
-    r"animation|trigger|interact|message|life|health",
+TYPE_TERMS = re.compile(
+    r"player|bear|character|sit|seat|respawn|interact|",
+    re.IGNORECASE,
+)
+METHOD_TERMS = re.compile(
+    r"die|death|kill|damage|sit|seat|respawn|interact|trigger|animation",
     re.IGNORECASE,
 )
 
 
 def text(value):
-    if value is None:
-        return ""
-    return str(value)
+    return "" if value is None else str(value)
 
 
 def main():
@@ -32,20 +33,17 @@ def main():
         namespace = text(type_row.TypeNamespace)
         name = text(type_row.TypeName)
         full_name = (namespace + "." if namespace else "") + name
-        methods = []
-        for method_ref in type_row.MethodList:
-            method_name = text(method_ref.row.Name)
-            if TERMS.search(method_name):
-                methods.append(method_name)
-
-        if not TERMS.search(full_name) and not methods:
+        if not TYPE_TERMS.search(full_name):
+            continue
+        methods = [text(method.row.Name) for method in type_row.MethodList]
+        relevant = [method for method in methods if METHOD_TERMS.search(method)]
+        if not relevant:
             continue
         print(full_name)
-        for method_name in methods:
-            print(f"  {method_name}")
+        print("  " + ", ".join(relevant))
         emitted += 1
-        if emitted >= 250:
-            print("Output capped at 250 matching types.")
+        if emitted >= 300:
+            print("Output capped at 300 matching types.")
             break
 
     if emitted == 0:
