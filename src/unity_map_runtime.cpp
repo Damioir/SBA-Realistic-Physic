@@ -250,6 +250,13 @@ struct Il2CppStringView {
     char16_t chars[1];
 };
 
+struct MessagePlacement {
+    std::string event_key;
+    std::string object_name;
+    Vector3 position;
+};
+std::vector<MessagePlacement> g_messages;
+
 bool managed_ascii(void* managed_string, std::string* output) {
     if (!managed_string || !output) return false;
     const auto* value = static_cast<const Il2CppStringView*>(managed_string);
@@ -342,13 +349,6 @@ void create_chair(const Element& element) {
         }
     }
 }
-
-struct MessagePlacement {
-    std::string event_key;
-    std::string object_name;
-    Vector3 position;
-};
-std::vector<MessagePlacement> g_messages;
 
 void create_message(const Element& element) {
     if (!g_types.text_mesh || !g_types.game_object_add_component ||
