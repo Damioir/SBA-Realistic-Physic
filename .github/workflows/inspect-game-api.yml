@@ -37,3 +37,4 @@ jobs:
           done
           grep -n -E -A 10 -B 4 "HandlePlayerDeath|DamagePlayer|OnTriggerEnter\(|GetVehicleSeatIndex|PlayArcadeAnimation|EnterVehicle|PlayBearAnimation|PlayAnimWithTransition|Sit" \
             PlayerBearController.cs PlayerControllerBase.cs PlayerStateVehicle.cs PlayerAnimController.cs InteractionTrigger.cs PlayerTrigger.cs VehicleBase.cs || true
+          .tools/ilspycmd -l c interop/Assembly-CSharp.dll | grep -i -E "vehicle|seat|chair" || true

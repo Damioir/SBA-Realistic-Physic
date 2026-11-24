@@ -7,11 +7,11 @@ import sys
 import dnfile
 
 TYPE_TERMS = re.compile(
-    r"player|bear|character|sit|seat|respawn|interact",
+    r"player|bear|character|sit|seat|respawn|interact|vehicle|chair",
     re.IGNORECASE,
 )
 METHOD_TERMS = re.compile(
-    r"die|death|kill|damage|sit|seat|respawn|interact|trigger|animation",
+    r"die|death|kill|damage|sit|seat|respawn|interact|trigger|animation|vehicle|chair",
     re.IGNORECASE,
 )
 
