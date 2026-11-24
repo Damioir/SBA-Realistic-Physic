@@ -4,6 +4,7 @@ import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
 import android.os.Bundle;
+import android.app.AlertDialog;
 import android.view.Gravity;
 import android.view.MotionEvent;
 import android.view.View;
@@ -100,6 +101,8 @@ public final class CostumeMapActivity extends UnityPlayerActivity {
             Button choice = makeButton(tool.toUpperCase(Locale.ROOT).replace('_', ' '));
             choice.setOnClickListener(v -> {
                 selectedTool = tool;
+                selectedIndex = -1;
+                if (board != null) board.invalidate();
                 status.setText("Selected: " + tool.replace('_', ' '));
             });
             palette.addView(choice, new LinearLayout.LayoutParams(
@@ -125,6 +128,10 @@ public final class CostumeMapActivity extends UnityPlayerActivity {
             }
         });
         footer.addView(undo, new LinearLayout.LayoutParams(dp(64), dp(48)));
+
+        Button edit = makeButton("EDIT");
+        edit.setOnClickListener(v -> editSelected());
+        footer.addView(edit, new LinearLayout.LayoutParams(dp(58), dp(48)));
 
         Button remove = makeButton("DELETE");
         remove.setOnClickListener(v -> {
@@ -156,6 +163,106 @@ public final class CostumeMapActivity extends UnityPlayerActivity {
         board = null;
     }
 
+    private void editSelected() {
+        if (selectedIndex < 0 || selectedIndex >= items.size()) {
+            status.setText("Select an item first");
+            return;
+        }
+        MapItem item = items.get(selectedIndex);
+        LinearLayout fields = new LinearLayout(this);
+        fields.setOrientation(LinearLayout.VERTICAL);
+        fields.setPadding(dp(20), dp(8), dp(20), dp(4));
+
+        EditText sizeInput = new EditText(this);
+        sizeInput.setSingleLine(true);
+        sizeInput.setHint("Size (0.05 to 100)");
+        sizeInput.setText(String.format(Locale.US, "%.2f", item.scaleX));
+        fields.addView(sizeInput);
+
+        EditText messageInput = null;
+        EditText eventInput = null;
+        EditText animationInput = null;
+        if (item.kind.equals("message")) {
+            messageInput = new EditText(this);
+            messageInput.setHint("Message text");
+            messageInput.setMinLines(2);
+            messageInput.setText(item.text);
+            fields.addView(messageInput);
+        }
+        if (item.kind.equals("trigger") || item.kind.equals("message")) {
+            eventInput = new EditText(this);
+            eventInput.setSingleLine(true);
+            eventInput.setHint("Event key (e.g. event-1)");
+            eventInput.setText(item.eventKey);
+            fields.addView(eventInput);
+        }
+        if (item.kind.equals("animation")) {
+            animationInput = new EditText(this);
+            animationInput.setSingleLine(true);
+            animationInput.setHint("Animation key");
+            animationInput.setText(item.animationKey);
+            fields.addView(animationInput);
+        }
+
+        final EditText messageField = messageInput;
+        final EditText eventField = eventInput;
+        final EditText animationField = animationInput;
+        new AlertDialog.Builder(this)
+                .setTitle("Edit " + item.kind.replace('_', ' '))
+                .setView(fields)
+                .setNegativeButton("CANCEL", null)
+                .setPositiveButton("APPLY", (dialog, which) -> {
+                    try {
+                        float size = Float.parseFloat(sizeInput.getText().toString().trim());
+                        if (!Float.isFinite(size) || size < 0.05f || size > 100.0f) {
+                            status.setText("Size must be between 0.05 and 100");
+                            return;
+                        }
+                        if (eventField != null) {
+                            String key = eventField.getText().toString().trim();
+                            if ((item.kind.equals("trigger") || !key.isEmpty()) && !validKey(key)) {
+                                status.setText("Event key: use letters, numbers, dot, dash, underscore");
+                                return;
+                            }
+                            item.eventKey = key;
+                        }
+                        if (animationField != null) {
+                            String key = animationField.getText().toString().trim();
+                            if (!validKey(key)) {
+                                status.setText("Animation key is required");
+                                return;
+                            }
+                            item.animationKey = key;
+                        }
+                        if (messageField != null) {
+                            String value = messageField.getText().toString();
+                            if (value.trim().isEmpty() || value.length() > 1000) {
+                                status.setText("Message must contain 1-1000 characters");
+                                return;
+                            }
+                            item.text = value;
+                        }
+                        item.scaleX = size;
+                        item.scaleY = size;
+                        item.scaleZ = size;
+                        board.invalidate();
+                        status.setText("Updated " + item.kind.replace('_', ' '));
+                    } catch (NumberFormatException error) {
+                        status.setText("Enter a valid size");
+                    }
+                }).show();
+    }
+
+    private static boolean validKey(String value) {
+        if (value.isEmpty() || value.length() > 64) return false;
+        for (int i = 0; i < value.length(); i++) {
+            char c = value.charAt(i);
+            if (!((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+                    (c >= '0' && c <= '9') || c == '_' || c == '-' || c == '.')) return false;
+        }
+        return true;
+    }
+
     private Button makeButton(String label) {
         Button button = new Button(this);
         button.setText(label);
@@ -177,16 +284,18 @@ public final class CostumeMapActivity extends UnityPlayerActivity {
             StringBuilder data = new StringBuilder("SBA_MAP\t1\n");
             data.append("META\tcostume-map\t").append(escape(title)).append("\t\n");
             for (MapItem item : items) {
-                String text = item.kind.equals("message") ? "Hello bear!" : "";
-                String event = (item.kind.equals("trigger") || item.kind.equals("message")) ? "event-1" : "";
-                String animation = item.kind.equals("animation") ? "idle" : "";
                 data.append("ELEMENT\t").append(item.id).append('\t').append(item.kind)
                         .append("\t\t")
-                        .append(String.format(Locale.US, "%.2f", item.worldX)).append("\t0.00\t")
-                        .append(String.format(Locale.US, "%.2f", item.worldZ))
-                        .append("\t0.00\t1.00\t1.00\t1.00\t")
-                        .append(escape(text)).append('\t').append(escape(event)).append('\t')
-                        .append(escape(animation)).append('\n');
+                        .append(String.format(Locale.US, "%.2f", item.worldX())).append('\t')
+                        .append(String.format(Locale.US, "%.2f", item.worldY)).append('\t')
+                        .append(String.format(Locale.US, "%.2f", item.worldZ()))
+                        .append('\t').append(String.format(Locale.US, "%.2f", item.yaw))
+                        .append('\t').append(String.format(Locale.US, "%.2f", item.scaleX))
+                        .append('\t').append(String.format(Locale.US, "%.2f", item.scaleY))
+                        .append('\t').append(String.format(Locale.US, "%.2f", item.scaleZ))
+                        .append('\t').append(escape(item.text)).append('\t')
+                        .append(escape(item.eventKey)).append('\t')
+                        .append(escape(item.animationKey)).append('\n');
             }
             File target = new File(directory, "map1.sbamap");
             File temporary = new File(directory, "map1.sbamap.tmp");
@@ -239,7 +348,16 @@ public final class CostumeMapActivity extends UnityPlayerActivity {
                         column = Math.max(0, Math.min(19, column));
                         row = Math.max(0, Math.min(11, row));
                         String id = unescape(fields[1]);
-                        loaded.add(new MapItem(id, kind, column, row));
+                        MapItem item = new MapItem(id, kind, column, row);
+                        item.worldY = Float.parseFloat(fields[5]);
+                        item.yaw = Float.parseFloat(fields[7]);
+                        item.scaleX = Float.parseFloat(fields[8]);
+                        item.scaleY = Float.parseFloat(fields[9]);
+                        item.scaleZ = Float.parseFloat(fields[10]);
+                        item.text = unescape(fields[11]);
+                        item.eventKey = unescape(fields[12]);
+                        item.animationKey = unescape(fields[13]);
+                        loaded.add(item);
                         if (id.startsWith("item-")) {
                             try { largestId = Math.max(largestId, Integer.parseInt(id.substring(5))); }
                             catch (NumberFormatException ignored) { }
@@ -288,19 +406,34 @@ public final class CostumeMapActivity extends UnityPlayerActivity {
     private static final class MapItem {
         final String id;
         final String kind;
-        final int column;
-        final int row;
-        final float worldX;
-        final float worldZ;
+        int column;
+        int row;
+        float worldY = 0.0f;
+        float yaw = 0.0f;
+        float scaleX = 1.0f;
+        float scaleY = 1.0f;
+        float scaleZ = 1.0f;
+        String text = "";
+        String eventKey = "";
+        String animationKey = "";
 
         MapItem(String id, String kind, int column, int row) {
             this.id = id;
             this.kind = kind;
             this.column = column;
             this.row = row;
-            this.worldX = (column - 10) * 2.0f;
-            this.worldZ = (row - 6) * 2.0f;
+            if (kind.equals("message")) {
+                text = "Hello bear!";
+                eventKey = "event-1";
+            } else if (kind.equals("trigger")) {
+                eventKey = "event-1";
+            } else if (kind.equals("animation")) {
+                animationKey = "idle";
+            }
         }
+
+        float worldX() { return (column - 10) * 2.0f; }
+        float worldZ() { return (row - 6) * 2.0f; }
     }
 
     private final class MapBoard extends View {
@@ -370,6 +503,14 @@ public final class CostumeMapActivity extends UnityPlayerActivity {
             }
             if (items.size() >= 2000) {
                 status.setText("Map limit reached");
+                return true;
+            }
+            if (selectedIndex >= 0 && selectedIndex < items.size()) {
+                MapItem selected = items.get(selectedIndex);
+                selected.column = column;
+                selected.row = row;
+                invalidate();
+                status.setText("Moved " + selected.kind.replace('_', ' '));
                 return true;
             }
             items.add(new MapItem("item-" + nextId++, selectedTool, column, row));
