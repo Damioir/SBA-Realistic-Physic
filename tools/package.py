@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Create a reproducible SBAModLoader pack from the native library."""
+"""Create a reproducible SBAModLoader pack from the native library and optional DEX."""
 
 import argparse
 import json
@@ -19,7 +19,8 @@ def write_entry(archive: ZipFile, name: str, data: bytes) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--library", type=Path, default=Path("build") / LIBRARY_NAME)\n    parser.add_argument("--dex", type=Path)
+    parser.add_argument("--library", type=Path, default=Path("build") / LIBRARY_NAME)
+    parser.add_argument("--dex", type=Path)
     parser.add_argument(
         "--output",
         type=Path,
@@ -37,10 +38,18 @@ def main() -> None:
     if not library_path.is_file():
         raise SystemExit(f"Native library not found: {library_path}")
 
+    dex_path = None
+    if args.dex is not None:
+        dex_path = args.dex if args.dex.is_absolute() else root / args.dex
+        if not dex_path.is_file():
+            raise SystemExit(f"DEX file not found: {dex_path}")
+
     output_path.parent.mkdir(parents=True, exist_ok=True)
     with ZipFile(output_path, "w") as archive:
         write_entry(archive, "sbapack.json", manifest)
         write_entry(archive, LIBRARY_NAME, library_path.read_bytes())
+        if dex_path is not None:
+            write_entry(archive, "overlay/classes.dex", dex_path.read_bytes())
 
 
 if __name__ == "__main__":
