@@ -19,7 +19,7 @@ def write_entry(archive: ZipFile, name: str, data: bytes) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--library", type=Path, default=Path("build") / LIBRARY_NAME)
+    parser.add_argument("--library", type=Path, default=Path("build") / LIBRARY_NAME)\n    parser.add_argument("--dex", type=Path)
     parser.add_argument(
         "--output",
         type=Path,
