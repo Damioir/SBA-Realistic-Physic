@@ -1,5 +1,6 @@
 #include "map_storage.h"
 
+#include <cstdint>
 #include <cstdio>
 #include <fstream>
 #include <iterator>
