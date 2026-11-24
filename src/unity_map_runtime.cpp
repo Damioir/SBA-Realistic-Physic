@@ -79,8 +79,6 @@ struct Il2CppApi {
         for (std::size_t i = 0; assemblies && i < count; ++i) {
             void* image = assembly_get_image(assemblies[i]);
             if (!image) continue;
-            const char* image_name = image_get_name(image);
-            if (!image_name || std::strstr(image_name, "UnityEngine.CoreModule") == nullptr) continue;
             if (void* klass = class_from_name(image, name_space, class_name)) return klass;
         }
         return nullptr;
@@ -234,17 +232,11 @@ void create_message(const Element& element) {
         LOGW("TextMesh unavailable; skipped a message element");
         return;
     }
-    void* game_object = g_api.invoke(g_types.game_object_create_primitive, nullptr, nullptr);
+    void* game_object = create_cube(element.id + "-message",
+                                   {element.x, element.y + 1.4f, element.z},
+                                   {0.05f, 0.05f, 0.05f},
+                                   {0.58f, 0.32f, 0.88f, 1.0f});
     if (!game_object) return;
-    // Use an empty GameObject rather than a visible primitive.
-    void* empty_class = g_api.find_class("UnityEngine", "GameObject");
-    void* empty_ctor = g_api.method(empty_class, ".ctor", 0);
-    if (empty_ctor) {
-        // CreatePrimitive has no no-geometry mode; destroy its collider/renderer is
-        // outside this adapter's scope. Keep it as a small marker for now.
-    }
-    set_transform(game_object, {element.x, element.y + 1.4f, element.z}, {0.05f, 0.05f, 0.05f});
-    set_name(game_object, element.id + "-message");
 
     void* component_args[] = {g_types.text_mesh_type};
     void* text_mesh = g_api.invoke(g_types.game_object_add_component, game_object, component_args);
