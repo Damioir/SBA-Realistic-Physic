@@ -10,6 +10,7 @@ add_library(
     SHARED
     src/physics.cpp
     src/costume_map.cpp
+    src/editor_session.cpp
 )
 
 find_library(log-lib log)
