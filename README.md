@@ -1,17 +1,13 @@
 # SBA-Realistic-Physic
 
-Native Android mod project for Super Bear Adventure.
+Native SBAModLoader mod project for Super Bear Adventure 13.0.9.
 
-## Costume map editor work
+## Costume Map Maker
 
-The `costume-map-editor` branch now contains the first editor core:
+The `costume-map-editor` branch now builds an `.sbapack` with an in-game grid editor. Open **MAP EDITOR**, choose an item type, tap grid cells to place it, then save or load the map. Maps are stored at the game's app-specific `CostumeMaps/map1.sbamap` path. On the next launch, the native adapter creates Unity objects from the saved map.
 
-- Map elements for props, chairs, instant-death blocks, text messages, triggers, and animation events.
-- Validation for IDs, element counts, text sizes, positions, rotations, and scales.
-- A versioned, escaped `.sbamap` document format with encode/decode functions.
-- In-memory editor operations for selecting, adding, moving, rotating, scaling, deleting, grid snapping, undo, and redo.
-- Validated local file save/load with temporary-file replacement.
+The current runtime creates cube props, decorative chair shapes, red death-block markers, and floating text labels. Chair sitting, actual instant-death behavior, trigger actions, and animation events are not implemented yet. Those need game-specific behavior and still need implementation and device testing.
 
-This is still source code, not an installable or playable mod. It does not yet show an editor in-game, spawn Unity objects, or save files to device storage. The next work is the in-game UI, map storage, Unity object adapter, and packaging as an `.sbapack` for SBAModLoader. Target game version: Super Bear Adventure 13.0.9.
+The map data layer includes validation, versioned serialization, selection/edit operations, grid snapping, undo/redo, and local file save/load. The GitHub Actions workflow builds the native library, compiles the editor activity, and packages both into an SBAModLoader `.sbapack`.
 
-See `src/costume_map.h` and `src/editor_session.h` for the document and editing APIs.
+Use the **SBA-Costume-Map-Maker** artifact from the branch's latest successful Actions run to get the pack. It is not an APK.
