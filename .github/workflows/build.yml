@@ -22,6 +22,12 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y ninja-build
 
+      - name: Prepare pinned minimal Dobby
+        run: |
+          git clone --no-checkout https://github.com/jmpews/Dobby.git third_party/dobby-upstream
+          git -C third_party/dobby-upstream checkout ed69ebebc762b05c1bbce005f3d470cdb22602b8
+          python3 tools/prepare_dobby.py third_party/dobby-upstream third_party/dobby-mini
+
       - name: Build Android library
         run: |
           NDK="$ANDROID_HOME/ndk/28.2.13676358"

@@ -2,12 +2,14 @@
 
 #include "costume_map.h"
 #include "map_storage.h"
+#include "dobby.h"
 
 #include <android/log.h>
 #include <dlfcn.h>
 #include <atomic>
 #include <cstddef>
 #include <cstring>
+#include <cstdint>
 #include <string>
 
 #define TAG "SBACostumeMapMaker"
@@ -45,6 +47,7 @@ struct Il2CppApi {
     void* (*type_get_object)(void*) = nullptr;
     void* (*string_new)(const char*) = nullptr;
     void* (*runtime_invoke)(void*, void*, void**, void**) = nullptr;
+    void (*player_trigger_original)(void*, void*, void*) = nullptr;
 
     template <typename T>
     bool bind(T* target, const char* name) {
@@ -118,6 +121,13 @@ struct UnityTypes {
     void* text_mesh_set_font_size = nullptr;
     void* renderer_type = nullptr;
     void* text_mesh_type = nullptr;
+    void* collider = nullptr;
+    void* box_collider_type = nullptr;
+    void* collider_set_is_trigger = nullptr;
+    void* collider_get_game_object = nullptr;
+    void* game_object_get_name = nullptr;
+    void* player_on_trigger_enter = nullptr;
+    void* player_handle_death = nullptr;
 };
 
 std::atomic<bool> g_started{false};
@@ -156,6 +166,19 @@ bool resolve_types() {
             g_api.method(material, "set_color", 1);
         g_types.renderer_type = g_api.type_get_object(g_api.class_get_type(g_types.renderer));
     }
+    g_types.collider = g_api.find_class("UnityEngine", "Collider");
+    void* box_collider = g_api.find_class("UnityEngine", "BoxCollider");
+    if (box_collider) g_types.box_collider_type =
+        g_api.type_get_object(g_api.class_get_type(box_collider));
+    if (g_types.collider) {
+        g_types.collider_set_is_trigger = g_api.method(g_types.collider, "set_isTrigger", 1);
+        g_types.collider_get_game_object = g_api.method(g_types.collider, "get_gameObject", 0);
+    }
+    g_types.game_object_get_name = g_api.method(g_types.game_object, "get_name", 0);
+    void* player = g_api.find_class("", "PlayerBearController");
+    g_types.player_on_trigger_enter = g_api.method(player, "OnTriggerEnter", 1);
+    g_types.player_handle_death = g_api.method(player, "HandlePlayerDeath", 0);
+
     if (g_types.text_mesh) {
         g_types.game_object_add_component =
             g_api.method(g_types.game_object, "AddComponent", 1);
@@ -204,6 +227,67 @@ void* create_cube(const std::string& name, Vector3 position, Vector3 scale, Colo
     set_name(game_object, name);
     set_color(game_object, color);
     return game_object;
+}
+
+void make_trigger(void* game_object) {
+    if (!game_object || !g_types.box_collider_type || !g_types.game_object_get_component ||
+        !g_types.collider_set_is_trigger) return;
+    void* component_args[] = {g_types.box_collider_type};
+    void* collider = g_api.invoke(g_types.game_object_get_component, game_object, component_args);
+    if (!collider) return;
+    bool enabled = true;
+    void* args[] = {&enabled};
+    g_api.invoke(g_types.collider_set_is_trigger, collider, args);
+}
+
+struct Il2CppStringView {
+    void* klass;
+    void* monitor;
+    int32_t length;
+    char16_t chars[1];
+};
+
+bool has_prefix(void* managed_string, const char* prefix) {
+    if (!managed_string) return false;
+    const auto* value = static_cast<const Il2CppStringView*>(managed_string);
+    std::size_t i = 0;
+    for (; prefix[i] != '\0'; ++i) {
+        if (i >= static_cast<std::size_t>(value->length) ||
+            value->chars[i] != static_cast<unsigned char>(prefix[i])) return false;
+    }
+    return true;
+}
+
+void on_player_trigger_enter(void* self, void* other, void* method_info) {
+    if (g_api.player_trigger_original) {
+        g_api.player_trigger_original(self, other, method_info);
+    }
+    if (!self || !other || !g_types.collider_get_game_object || !g_types.game_object_get_name) return;
+    void* object = g_api.invoke(g_types.collider_get_game_object, other);
+    void* name = g_api.invoke(g_types.game_object_get_name, object);
+    if (!has_prefix(name, "sba-costume-death:") || !g_types.player_handle_death) return;
+    g_api.invoke(g_types.player_handle_death, self);
+}
+
+bool install_death_block_hook() {
+    if (!g_types.player_on_trigger_enter || !g_types.player_handle_death) {
+        LOGW("death block hook skipped: SBA 13.0.9 player methods unavailable");
+        return false;
+    }
+    void* target = *reinterpret_cast<void**>(g_types.player_on_trigger_enter);
+    if (!target) {
+        LOGW("death block hook skipped: OnTriggerEnter has no native pointer");
+        return false;
+    }
+    const int result = DobbyHook(target,
+        reinterpret_cast<dobby_dummy_func_t>(on_player_trigger_enter),
+        reinterpret_cast<dobby_dummy_func_t*>(&g_api.player_trigger_original));
+    if (result != 0 || !g_api.player_trigger_original) {
+        LOGW("death block hook installation failed (%d)", result);
+        return false;
+    }
+    LOGI("death block hook installed for SBA 13.0.9");
+    return true;
 }
 
 void create_chair(const Element& element) {
@@ -283,10 +367,16 @@ void load_into_game() {
                 create_chair(element);
                 ++spawned;
                 break;
-            case ElementKind::DeathBlock:
-                if (create_cube(element.id, {element.x, element.y, element.z},
-                                {element.scale_x, element.scale_y, element.scale_z}, danger)) ++spawned;
+            case ElementKind::DeathBlock: {
+                void* block = create_cube(std::string("sba-costume-death:") + element.id,
+                                          {element.x, element.y, element.z},
+                                          {element.scale_x, element.scale_y, element.scale_z}, danger);
+                if (block) {
+                    make_trigger(block);
+                    ++spawned;
+                }
                 break;
+            }
             case ElementKind::Message:
                 create_message(element);
                 ++spawned;
@@ -298,6 +388,7 @@ void load_into_game() {
                 break;
         }
     }
+    install_death_block_hook();
     LOGI("loaded map '%s': %zu of %zu items created", document.title.c_str(),
          spawned, document.elements.size());
 }

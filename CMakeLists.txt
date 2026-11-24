@@ -5,6 +5,8 @@ project(SBARealisticPhysics LANGUAGES C CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+add_subdirectory(third_party/dobby-mini)
+
 add_library(
     sba_physics
     SHARED
@@ -20,4 +22,5 @@ find_library(log-lib log)
 target_link_libraries(
     sba_physics
     ${log-lib}
+    dobby_mini
 )
