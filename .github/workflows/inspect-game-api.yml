@@ -1,0 +1,28 @@
+name: Inspect SBA 13.0.9 game API
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [costume-map-editor]
+    paths:
+      - .github/workflows/inspect-game-api.yml
+      - tools/inspect_game_api.py
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download official 13.0.9 interop assemblies
+        run: |
+          curl --fail --location --silent --show-error \
+            https://github.com/SBAModding/AssemblyRepository/releases/download/13.0.9/interop.zip \
+            --output interop.zip
+          echo "c2c0d7f68f80822d69f14cdbba11f2656fcd143f4497d9ecfd1bab4c85a37a98  interop.zip" | sha256sum --check
+          unzip -q interop.zip -d interop
+      - name: Inspect player and interaction APIs
+        run: |
+          python3 -m venv .venv
+          . .venv/bin/activate
+          python -m pip install --quiet dnfile
+          python tools/inspect_game_api.py interop/Assembly-CSharp.dll
